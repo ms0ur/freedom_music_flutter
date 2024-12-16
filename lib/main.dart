@@ -6,6 +6,10 @@ import 'package:freedom_music_dart/permisson/permisson_provider.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'models/history.dart';
+import 'models/music.dart';
+import 'models/queue.dart';
+import 'models/settings.dart';
 import 'pages/home_page.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/app_bar.dart';
@@ -19,8 +23,20 @@ import 'pages/settings_page.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 
+
+
 void main() async {
   await Hive.initFlutter();
+  Hive.registerAdapter(SettingsAdapter());
+  Hive.openBox<Settings>('settings');
+  Box<Settings> settingsBox = Hive.box<Settings>('settings');
+
+  Hive.registerAdapter(MusicAdapter());
+  Hive.registerAdapter(HistoryAdapter());
+  Hive.registerAdapter(QueueAdapter());
+  await Hive.openLazyBox<Music>('music');
+  await Hive.openLazyBox<History>('history');
+  await Hive.openLazyBox<Queue>('queue');
   runApp(
     MultiProvider(
       providers: [
