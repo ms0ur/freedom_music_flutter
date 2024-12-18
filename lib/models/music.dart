@@ -5,21 +5,27 @@ part 'music.g.dart';
 @HiveType(typeId: 0)
 class Music extends HiveObject {
   @HiveField(0)
-  String id;
+  late String id;
 
   @HiveField(1)
-  String title;
+  late String title;
 
   @HiveField(2)
-  List<String> artists;
+  late List<String> artists;
 
   @HiveField(3)
-  String album;
+  late String album;
 
   @HiveField(4)
-  String location;
+  late String location;
 
   @HiveField(5)
-  String lyrics;
+  late String lyricsSynced;
+
+  @HiveField(6)
+  late String lyricsPlain;
+
+  @HiveField(7)
+  late String fileHash;
 
 }

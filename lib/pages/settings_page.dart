@@ -74,7 +74,7 @@ class SettingsPage extends StatelessWidget {
                     ),
                     child: Text('Request')
                 )
-                    : const Text('Granted'), // or any other widget you want to display when the permission is granted
+                    : const Text('Granted', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),), // or any other widget you want to display when the permission is granted
               ],
             ),
           ],

@@ -1,6 +1,7 @@
 
 
 import 'package:flutter/material.dart';
+import 'package:freedom_music_dart/pages/import_music.dart';
 import 'package:freedom_music_dart/theme/theme_provider.dart';
 import 'package:freedom_music_dart/permisson/permisson_provider.dart';
 import 'package:hive/hive.dart';
@@ -20,23 +21,21 @@ import 'pages/profile_page.dart';
 import 'pages/settings_page.dart';
 
 
-import 'package:permission_handler/permission_handler.dart';
-
 
 
 
 void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(SettingsAdapter());
-  Hive.openBox<Settings>('settings');
+  await Hive.openBox<Settings>('settings');
   Box<Settings> settingsBox = Hive.box<Settings>('settings');
 
   Hive.registerAdapter(MusicAdapter());
   Hive.registerAdapter(HistoryAdapter());
   Hive.registerAdapter(QueueAdapter());
-  await Hive.openLazyBox<Music>('music');
-  await Hive.openLazyBox<History>('history');
-  await Hive.openLazyBox<Queue>('queue');
+  await Hive.openBox<Music>('music');
+  await Hive.openBox<History>('history');
+  await Hive.openBox<Queue>('queue');
   runApp(
     MultiProvider(
       providers: [
@@ -83,12 +82,24 @@ class _MainPageState extends State<MainPage> {
   ];
 
   void _navigateToSettingsPage() {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SettingsPage(
+          onReturn: () {
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _navigateToImportMusicPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MusicImportPage(
           onReturn: () {
             Navigator.pop(context);
           },
@@ -106,7 +117,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBarC(onSettingsTap: _navigateToSettingsPage),
+      appBar: AppBarC(onSettingsTap: _navigateToSettingsPage, onImportTap: _navigateToImportMusicPage,),
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,

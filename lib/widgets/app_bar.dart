@@ -3,9 +3,12 @@ import 'package:flutter/cupertino.dart';
 
 class AppBarC extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onSettingsTap;
+
+  final VoidCallback onImportTap;
   const AppBarC({
     super.key,
     required this.onSettingsTap,
+    required this.onImportTap,
   });
 
 
@@ -27,6 +30,9 @@ class AppBarC extends StatelessWidget implements PreferredSizeWidget {
             onSettingsTap();
           },
         ),
+        IconButton(onPressed: () {
+          onImportTap();
+        }, icon: const Icon(Icons.add_circle)),
         IconButton(
           icon: const Icon(Icons.search),
           onPressed: () {

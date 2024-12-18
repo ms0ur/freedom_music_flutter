@@ -5,8 +5,8 @@ part 'history.g.dart';
 @HiveType(typeId: 2)
 class History extends HiveObject {
   @HiveField(0)
-  String songId;
+  late String songId;
 
   @HiveField(1)
-  String timePlayed;
+  late String timePlayed;
 }

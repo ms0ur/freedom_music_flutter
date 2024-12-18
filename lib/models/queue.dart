@@ -5,8 +5,8 @@ part 'queue.g.dart';
 @HiveType(typeId: 1)
 class Queue extends HiveObject {
   @HiveField(0)
-  Map<String, dynamic> currentSong;
+  late Map<String, dynamic> currentSong;
 
   @HiveField(1)
-  List<String> queue;
+  late List<String> queue;
 }

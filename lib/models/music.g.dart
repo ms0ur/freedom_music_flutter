@@ -22,13 +22,15 @@ class MusicAdapter extends TypeAdapter<Music> {
       ..artists = (fields[2] as List).cast<String>()
       ..album = fields[3] as String
       ..location = fields[4] as String
-      ..lyrics = fields[5] as String;
+      ..lyricsSynced = fields[5] as String
+      ..lyricsPlain = fields[6] as String
+      ..fileHash = fields[7] as String;
   }
 
   @override
   void write(BinaryWriter writer, Music obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -40,7 +42,11 @@ class MusicAdapter extends TypeAdapter<Music> {
       ..writeByte(4)
       ..write(obj.location)
       ..writeByte(5)
-      ..write(obj.lyrics);
+      ..write(obj.lyricsSynced)
+      ..writeByte(6)
+      ..write(obj.lyricsPlain)
+      ..writeByte(7)
+      ..write(obj.fileHash);
   }
 
   @override
