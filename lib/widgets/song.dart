@@ -1,101 +1,128 @@
-import 'package:flutter/material.dart';
 import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:audiotags/audiotags.dart';
+
+import '../models/music.dart'; // For metadata extraction
 
 class SongTile extends StatelessWidget {
-  final String title;
-  final String artist;
-  final String album;
-  final String duration;
-  final String cover;
-  final bool isContainLyrics;
+  final String id;
   final bool isPlaying;
 
   const SongTile({
     super.key,
-    required this.title,
-    required this.artist,
-    required this.album,
-    required this.duration,
-    required this.cover,
-    required this.isContainLyrics,
+    required this.id,
     required this.isPlaying,
   });
 
+  Future<Map<String, dynamic>> _getTrackInfo(String id) async {
+    final box = Hive.box<Music>('music');
+    Music? music = await box.get(id);
+    if (music != null) {
+      final tags = await AudioTags.read(music.location);
+
+      Uint8List? coverData = tags!.pictures.isNotEmpty ? tags.pictures.first.bytes : null;
+
+      return {
+        'title': music.title,
+        'artist': music.artists.join(', '),
+        'album': music.album,
+        'duration': tags?.duration.toString() ?? '',
+        'cover': coverData,
+        'isContainLyrics': music.lyricsSynced != '',
+        'location': music.location,
+      };
+    }
+
+    return {
+      'title': '',
+      'artist': '',
+      'album': '',
+      'duration': '',
+      'cover': '',
+      'isContainLyrics': false,
+      'location': '',
+    };
+
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      child: Row(
-        children: [
-          // Обложка песни с анимацией
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              // Обложка
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8.0),
-                child: Image.network(
-                  cover,
-                  width: 60,
-                  height: 60,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              // Анимированные столбики
-              if (isPlaying)
-                Positioned.fill(
-                  child: AnimatedBars(),
-                ),
-            ],
-          ),
-          const SizedBox(width: 16.0),
-          // Основная информация
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16.0,
-                    fontWeight: FontWeight.bold,
-                    color: isPlaying ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.inverseSurface,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4.0),
-                Text(
-                  artist,
-                  style: TextStyle(
-                    fontSize: 14.0,
-                    color: Theme.of(context).colorScheme.inverseSurface,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getTrackInfo(id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const CircularProgressIndicator();
+        }
 
-              ],
-            ),
-          ),
-          const SizedBox(width: 16.0),
-          // Длительность и дополнительные иконки
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        final trackInfo = snapshot.data!;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          child: Row(
             children: [
-              Text(
-                duration,
-                style: TextStyle(
-                  fontSize: 12.0,
-                  color: Theme.of(context).colorScheme.inverseSurface,
+              // Cover image with fallback
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: trackInfo['cover'] != null
+                        ? Image.memory(trackInfo['cover'], height: 60, width: 60, fit: BoxFit.cover)
+                        : Icon(Icons.music_note, size: 60),
+                  ),
+                  if (isPlaying)
+                    const Positioned.fill(
+                      child: AnimatedBars(),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 16.0),
+              // Track details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trackInfo['title'],
+                      style: TextStyle(
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.bold,
+                        color: isPlaying
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).colorScheme.inverseSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4.0),
+                    Text(
+                      '${trackInfo['artist']} - ${trackInfo['album']}',
+                      style: TextStyle(
+                        fontSize: 14.0,
+                        color: Theme.of(context).colorScheme.inverseSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8.0),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(width: 16.0),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Иконка для текста песни
-                  if (isContainLyrics)
+                  Text(
+                    trackInfo['duration'],
+                    style: TextStyle(
+                      fontSize: 12.0,
+                      color: Theme.of(context).colorScheme.inverseSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8.0),
+                  if (trackInfo['isContainLyrics'])
                     Icon(
                       Icons.lyrics,
                       color: Theme.of(context).colorScheme.inverseSurface,
@@ -105,13 +132,13 @@ class SongTile extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
-// Анимированные столбики
+// Animated bars for the playing track
 class AnimatedBars extends StatefulWidget {
   const AnimatedBars({super.key});
 

@@ -2,8 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:freedom_music_dart/pages/import_music.dart';
+import 'package:freedom_music_dart/player/player_provider.dart';
 import 'package:freedom_music_dart/theme/theme_provider.dart';
 import 'package:freedom_music_dart/permisson/permisson_provider.dart';
+import 'package:freedom_music_dart/widgets/mini_player.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +32,16 @@ void main() async {
   await Hive.openBox<Settings>('settings');
   Box<Settings> settingsBox = Hive.box<Settings>('settings');
 
+  if (settingsBox.isEmpty) {
+    // Инициализация по умолчанию
+    final s = Settings();
+    s.setting = {
+      'onlineFeatures': false,
+      'lastfmApiKey': '',
+    };
+    await settingsBox.add(s);
+  }
+
   Hive.registerAdapter(MusicAdapter());
   Hive.registerAdapter(HistoryAdapter());
   Hive.registerAdapter(QueueAdapter());
@@ -41,6 +53,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => PermissionProvider()),
+        ChangeNotifierProvider(create: (_) => PlayerProvider()),
       ],
       child: const MyApp(),
     ),
@@ -125,6 +138,11 @@ class _MainPageState extends State<MainPage> {
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
+      ),
+      bottomSheet: Consumer<PlayerProvider>(
+        builder: (context, player, child) {
+          return player.currentTrack != null ? MiniPlayer() : SizedBox.shrink();
+        },
       ),
     );
   }

@@ -18,6 +18,13 @@ class PermissionProvider extends ChangeNotifier {
     }
     _storagePermissionGranted = status.isGranted || status1.isGranted;
     notifyListeners();
+
+    var status2 = await Permission.manageExternalStorage.status;
+    if (!status2.isGranted) {
+      status2 = await Permission.manageExternalStorage.request();
+    }
+    _storagePermissionGranted = status.isGranted || (status1.isGranted && status2.isGranted);
+    notifyListeners();
   }
 
   Future<void> requestNotificationPermission() async {

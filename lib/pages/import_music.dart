@@ -1,4 +1,6 @@
+// import_music.dart
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audiotags/audiotags.dart';
@@ -8,9 +10,9 @@ import 'package:path/path.dart' as p;
 import 'package:crypto/crypto.dart' as crypto;
 import 'dart:convert';
 import '../models/music.dart';
+import '../models/settings.dart';
 import 'package:http/http.dart' as http;
 import '../permisson/permisson_provider.dart';
-import 'package:media_store_plus/media_store_plus.dart';
 
 class MusicImportPage extends StatefulWidget {
   final VoidCallback onReturn;
@@ -77,11 +79,16 @@ class _MusicImportState extends State<MusicImportPage> {
       album = album ?? '';
       List<String> artistsList = artist!.split(' and ').map((e) => e.trim()).toList();
 
+      // Извлекаем встроенную обложку, если есть
+      Uint8List? embeddedCover = tag!.pictures.isNotEmpty ? tag.pictures.first.bytes : null;
+
       Map<String, dynamic>? editedData = await _showEditDialog(
         context,
-        title: title!,
+        title: title,
         artists: artistsList,
         album: album,
+        embeddedCover: embeddedCover,
+        trackArtist: artist,
       );
 
       if (editedData == null) {
@@ -91,38 +98,22 @@ class _MusicImportState extends State<MusicImportPage> {
       String finalTitle = editedData['title'];
       List<String> finalArtists = editedData['artists'];
       String finalAlbum = editedData['album'];
+      Uint8List? finalCoverBytes = editedData['coverBytes']; // конечная обложка
 
       String artistFileName = finalArtists.join('_');
-      String newFileName = '$artistFileName-$finalTitle.mp3';
-
-      final mediaStorePlugin = MediaStore();
+      String newFileName = '$artistFileName -- $finalTitle.mp3';
 
       try {
-        final tempFilePath = mp3File.path;
-        await MediaStore.ensureInitialized();
-        MediaStore.appFolder = "FreedomMusic";
+        String newPath = 'storage/emulated/0/FreedomMusic/$newFileName';
 
-        final saveInfo = await mediaStorePlugin.saveFile(
-          tempFilePath: tempFilePath,
-          dirType: DirType.audio,
-          dirName: DirName.music,
-        );
+        Directory('storage/emulated/0/FreedomMusic').createSync(recursive: true);
+        File newAudio = await mp3File.copy(newPath);
 
-        if (saveInfo == null) {
-          setState(() {
-            _statusMessage = 'Ошибка сохранения файла $newFileName';
-          });
-          continue;
-        }
-
-        final savedFile = File(saveInfo.uri.toFilePath());
-        final renamedFile = savedFile.renameSync(p.join(savedFile.parent.path, newFileName));
-
-        String fileHash = await _computeFileHash(savedFile);
+        String fileHash = await _computeFileHash(newAudio);
         int? durationSec = tag?.duration;
 
         Map<String, dynamic>? lyricsData = await _fetchLyrics(
-          artistName: finalArtists.join(' and '),
+          artistName: finalArtists.join(' '),
           trackName: finalTitle,
           albumName: finalAlbum,
           duration: durationSec,
@@ -137,12 +128,17 @@ class _MusicImportState extends State<MusicImportPage> {
           ..title = finalTitle
           ..artists = finalArtists
           ..album = finalAlbum
-          ..location = renamedFile.path
+          ..location = newPath
           ..lyricsSynced = syncedLyrics
           ..lyricsPlain = plainLyrics
           ..fileHash = fileHash;
 
+        // Можно было бы сохранать обложку в отдельное поле или файл. Для примера пропустим.
+        // Если нужно, можно сохранить base64 обложки:
+        // music.coverBase64 = finalCoverBytes != null ? base64Encode(finalCoverBytes) : '';
+
         await musicBox.add(music);
+
       } catch (e) {
         setState(() {
           _statusMessage = 'Ошибка: $e';
@@ -160,57 +156,177 @@ class _MusicImportState extends State<MusicImportPage> {
     return input.replaceAll(RegExp(r'https?:\/\/\S+'), '').replaceAll(RegExp(r'\.ru|\.net|\.com'), '').trim();
   }
 
-  Future<Map<String, dynamic>?> _showEditDialog(BuildContext context, {required String title, required List<String> artists, required String album}) async {
+  Future<Map<String, dynamic>?> _showEditDialog(
+      BuildContext context,
+      {required String title,
+        required List<String> artists,
+        required String album,
+        Uint8List? embeddedCover,
+        required String trackArtist,
+      }) async {
+
+    final settingsBox = Hive.box<Settings>('settings');
+    final s = settingsBox.values.first;
+    bool onlineFeatures = s.setting['onlineFeatures'] ?? false;
+    String lastfmApiKey = s.setting['lastfmApiKey'] ?? '';
+
     TextEditingController titleController = TextEditingController(text: title);
     TextEditingController artistsController = TextEditingController(text: artists.join('_'));
     TextEditingController albumController = TextEditingController(text: album);
+    TextEditingController coverUrlController = TextEditingController();
+
+    bool autoCover = false; // авто получение обложки с LastFM
+    Uint8List? coverBytes = embeddedCover; // текущая обложка
+    // Если нет встроенной обложки, coverBytes = null
+
+    Future<void> updateCoverPreview() async {
+      // Обновляет coverBytes в зависимости от режима
+      if (autoCover && onlineFeatures && lastfmApiKey.isNotEmpty) {
+        // Авто получить обложку
+        final c = await fetchAlbumCover(trackArtist, title, lastfmApiKey);
+        if (c != null) {
+          // Загрузим картинку как bytes
+          final imgResp = await http.get(Uri.parse(c));
+          if (imgResp.statusCode == 200) {
+            coverBytes = imgResp.bodyBytes;
+          }
+        } else {
+          // Не получилось
+          coverBytes = null;
+        }
+      } else if (!autoCover && coverUrlController.text.isNotEmpty) {
+        // Получить обложку по URL
+        final url = coverUrlController.text.trim();
+        final imgResp = await http.get(Uri.parse(url));
+        if (imgResp.statusCode == 200) {
+          coverBytes = imgResp.bodyBytes;
+        } else {
+          coverBytes = null;
+        }
+      } else if (!autoCover && coverUrlController.text.isEmpty && embeddedCover != null) {
+        // Вернуться к исходной, если была
+        coverBytes = embeddedCover;
+      } else if (!autoCover && coverUrlController.text.isEmpty && embeddedCover == null) {
+        // нет обложки
+        coverBytes = null;
+      }
+    }
 
     return showDialog<Map<String, dynamic>>(
         context: context,
         builder: (ctx) {
-          return AlertDialog(
-            title: Text('Редактирование метаданных'),
-            content: SingleChildScrollView(
-              child: Column(
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: InputDecoration(labelText: 'Название *'),
-                  ),
-                  TextField(
-                    controller: artistsController,
-                    decoration: InputDecoration(labelText: 'Исполнители (через нижнее подчеркивание) *'),
-                  ),
-                  TextField(
-                    controller: albumController,
-                    decoration: InputDecoration(labelText: 'Альбом'),
-                  ),
-                ],
+          return StatefulBuilder(builder: (ctx, setStateDialog) {
+            Future<void> refreshPreview() async {
+              await updateCoverPreview();
+              setStateDialog(() {});
+            }
+
+            return AlertDialog(
+              title: Text('Редактирование метаданных'),
+              content: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(labelText: 'Название *'),
+                    ),
+                    TextField(
+                      controller: artistsController,
+                      decoration: InputDecoration(labelText: 'Исполнители (через нижнее подчеркивание) *'),
+                    ),
+                    TextField(
+                      controller: albumController,
+                      decoration: InputDecoration(labelText: 'Альбом'),
+                    ),
+
+                    // Раздел для обложки
+                    SizedBox(height: 20),
+                    if (onlineFeatures && lastfmApiKey.isNotEmpty)
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: autoCover,
+                            onChanged: (val) {
+                              setStateDialog(() {
+                                autoCover = val ?? false;
+                              });
+                              refreshPreview();
+                            },
+                          ),
+                          Text('Авто получить обложку'),
+                        ],
+                      ),
+
+                    TextField(
+                      controller: coverUrlController,
+                      enabled: !autoCover, // если авто включено, поле для url неактивно
+                      decoration: InputDecoration(labelText: 'Cover URL'),
+                      onChanged: (val) {
+                        refreshPreview();
+                      },
+                    ),
+
+                    SizedBox(height: 20),
+                    // Превью обложки
+                    if (coverBytes != null)
+                      Stack(
+                        children: [
+                          Image.memory(coverBytes!, height: 200),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () {
+                                setStateDialog(() {
+                                  coverBytes = null;
+                                  coverUrlController.clear();
+                                  autoCover = false;
+                                });
+                              },
+                              child: Container(
+                                color: Colors.black54,
+                                child: Icon(Icons.close, color: Colors.white),
+                              ),
+                            ),
+                          )
+                        ],
+                      )
+                    else
+                      Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.grey[300],
+                        child: Center(child: Text('Нет обложки')),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, null),
-                child: Text('Отмена'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  String finalTitle = titleController.text.trim();
-                  String finalArtists = artistsController.text.trim();
-                  if (finalTitle.isEmpty || finalArtists.isEmpty) {
-                    return;
-                  }
-                  List<String> finalArtistsList = finalArtists.split('_').map((e) => e.trim()).toList();
-                  Navigator.pop(ctx, {
-                    'title': finalTitle,
-                    'artists': finalArtistsList,
-                    'album': albumController.text.trim(),
-                  });
-                },
-                child: Text('Сохранить'),
-              ),
-            ],
-          );
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: Text('Отмена'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    String finalTitle = titleController.text.trim();
+                    String finalArtistsStr = artistsController.text.trim();
+                    if (finalTitle.isEmpty || finalArtistsStr.isEmpty) {
+                      return;
+                    }
+                    List<String> finalArtistsList = finalArtistsStr.split('_').map((e) => e.trim()).toList();
+
+                    Navigator.pop(ctx, {
+                      'title': finalTitle,
+                      'artists': finalArtistsList,
+                      'album': albumController.text.trim(),
+                      'coverBytes': coverBytes
+                    });
+                  },
+                  child: Text('Сохранить'),
+                ),
+              ],
+            );
+          });
         });
   }
 
@@ -239,6 +355,35 @@ class _MusicImportState extends State<MusicImportPage> {
     } else {
       return null;
     }
+  }
+
+  // Функция получения обложки из LastFM
+  Future<String?> fetchAlbumCover(String artist, String track, String apiKey) async {
+    final trackInfoUrl =
+        'http://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=$apiKey&artist=${Uri.encodeComponent(artist)}&track=${Uri.encodeComponent(track)}&format=json';
+
+    final trackResponse = await http.get(Uri.parse(trackInfoUrl));
+    if (trackResponse.statusCode == 200) {
+      final trackData = json.decode(trackResponse.body);
+      if (trackData['track'] == null || trackData['track']['album'] == null) {
+        return null;
+      }
+      final albumName = trackData['track']['album']['title'];
+
+      final albumInfoUrl =
+          'http://ws.audioscrobbler.com/2.0/?method=album.getInfo&api_key=$apiKey&artist=${Uri.encodeComponent(artist)}&album=${Uri.encodeComponent(albumName)}&format=json';
+
+      final albumResponse = await http.get(Uri.parse(albumInfoUrl));
+      if (albumResponse.statusCode == 200) {
+        final albumData = json.decode(albumResponse.body);
+        final images = albumData['album']['image'];
+        if (images != null && images is List && images.isNotEmpty) {
+          final imageUrl = images.last['#text'];
+          return imageUrl.isNotEmpty ? imageUrl : null;
+        }
+      }
+    }
+    return null;
   }
 
   @override
