@@ -1,9 +1,12 @@
 // import_music.dart
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+
 import 'package:audiotags/audiotags.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +16,7 @@ import '../models/music.dart';
 import '../models/settings.dart';
 import 'package:http/http.dart' as http;
 import '../permisson/permisson_provider.dart';
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 
 class MusicImportPage extends StatefulWidget {
   final VoidCallback onReturn;
@@ -40,8 +44,7 @@ class _MusicImportState extends State<MusicImportPage> {
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      type: FileType.custom,
-      allowedExtensions: ['mp3'],
+      type: FileType.audio,
     );
 
     if (result == null) {
@@ -56,8 +59,20 @@ class _MusicImportState extends State<MusicImportPage> {
     for (var file in result.files) {
       if (file.path == null) continue;
 
-      File mp3File = File(file.path!);
-      final tag = await AudioTags.read(mp3File.path);
+      String path = file.path!;
+      String extension = p.extension(path);
+
+
+      File mp3File = File(path);
+
+
+
+      final Tag? tag = await AudioTags.read(mp3File.path);
+
+      if (tag == null) {
+        throw Exception('Error reading metadata');
+      }
+
 
       String? title = tag?.title?.trim();
       String? artist = tag?.trackArtist?.trim();
@@ -78,6 +93,13 @@ class _MusicImportState extends State<MusicImportPage> {
 
       album = album ?? '';
       List<String> artistsList = artist!.split(' and ').map((e) => e.trim()).toList();
+
+      if (tag == null) {
+        setState(() {
+          _statusMessage = 'Ошибка чтения метаданных';
+        });
+        continue;
+      }
 
       // Извлекаем встроенную обложку, если есть
       Uint8List? embeddedCover = tag!.pictures.isNotEmpty ? tag.pictures.first.bytes : null;
@@ -101,7 +123,7 @@ class _MusicImportState extends State<MusicImportPage> {
       Uint8List? finalCoverBytes = editedData['coverBytes']; // конечная обложка
 
       String artistFileName = finalArtists.join('_');
-      String newFileName = '$artistFileName -- $finalTitle.mp3';
+      String newFileName = '$artistFileName -- $finalTitle.$extension';
 
       try {
         String newPath = 'storage/emulated/0/FreedomMusic/$newFileName';
@@ -110,7 +132,7 @@ class _MusicImportState extends State<MusicImportPage> {
         File newAudio = await mp3File.copy(newPath);
 
         String fileHash = await _computeFileHash(newAudio);
-        int? durationSec = tag?.duration;
+        int? durationSec = tag.duration;
 
         Map<String, dynamic>? lyricsData = await _fetchLyrics(
           artistName: finalArtists.join(' '),

@@ -1,8 +1,10 @@
+import 'dart:ffi';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
+
 import 'package:audiotags/audiotags.dart';
 
 import '../models/music.dart'; // For metadata extraction
@@ -29,7 +31,7 @@ class SongTile extends StatelessWidget {
         'title': music.title,
         'artist': music.artists.join(', '),
         'album': music.album,
-        'duration': tags?.duration.toString() ?? '',
+        'duration': tags.duration.toString(),
         'cover': coverData,
         'isContainLyrics': music.lyricsSynced != '',
         'location': music.location,

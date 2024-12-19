@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:freedom_music_dart/pages/import_music.dart';
 import 'package:freedom_music_dart/player/player_provider.dart';
@@ -8,6 +6,7 @@ import 'package:freedom_music_dart/permisson/permisson_provider.dart';
 import 'package:freedom_music_dart/widgets/mini_player.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'models/history.dart';
 import 'models/music.dart';
@@ -21,10 +20,6 @@ import 'pages/artists_page.dart';
 import 'pages/albums_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/settings_page.dart';
-
-
-
-
 
 void main() async {
   await Hive.initFlutter();
@@ -48,6 +43,12 @@ void main() async {
   await Hive.openBox<Music>('music');
   await Hive.openBox<History>('history');
   await Hive.openBox<Queue>('queue');
+
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'ru.ms0ur.freedom_music_dart.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
   runApp(
     MultiProvider(
       providers: [
@@ -65,7 +66,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(builder: (context, ThemeProvider themeProvider, child) {
+    return Consumer<ThemeProvider>(builder: (context, themeProvider, child) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'FreedomMusic Demo',
@@ -95,7 +96,6 @@ class _MainPageState extends State<MainPage> {
   ];
 
   void _navigateToSettingsPage() {
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -130,19 +130,28 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBarC(onSettingsTap: _navigateToSettingsPage, onImportTap: _navigateToImportMusicPage,),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      appBar: AppBarC(
+        onSettingsTap: _navigateToSettingsPage,
+        onImportTap: _navigateToImportMusicPage,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+          ),
+          Consumer<PlayerProvider>(
+            builder: (context, player, child) {
+              return player.currentTrack != null ? MiniPlayer() : SizedBox.shrink();
+            },
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
-      ),
-      bottomSheet: Consumer<PlayerProvider>(
-        builder: (context, player, child) {
-          return player.currentTrack != null ? MiniPlayer() : SizedBox.shrink();
-        },
       ),
     );
   }

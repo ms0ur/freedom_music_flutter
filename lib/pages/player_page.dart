@@ -262,7 +262,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.black54, Colors.black87],
+                            colors: [ Theme.of(context).colorScheme.surface.withAlpha(50), Theme.of(context).colorScheme.surface ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
@@ -295,7 +295,7 @@ class _PlayerPageState extends State<PlayerPage> {
         '${track.title}\n${track.artists.join(', ')}',
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: onBgColor,
+          color: Theme.of(context).colorScheme.onSurface,
           fontSize: 24,
           fontWeight: FontWeight.bold,
         ),
@@ -320,7 +320,7 @@ class _PlayerPageState extends State<PlayerPage> {
               child: Text(
                 line.text,
                 style: TextStyle(
-                  color: onBgColor,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: line.isCurrent ? 20 : 16,
                   fontWeight: line.isCurrent ? FontWeight.bold : FontWeight.normal,
                 ),
@@ -340,7 +340,7 @@ class _PlayerPageState extends State<PlayerPage> {
             padding: const EdgeInsets.symmetric(vertical: 32),
             child: Text(
               track.lyricsPlain,
-              style: TextStyle(color: onBgColor, fontSize: 16),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16),
               textAlign: TextAlign.center,
             ),
           ),
@@ -350,7 +350,7 @@ class _PlayerPageState extends State<PlayerPage> {
       return Container(
         key: ValueKey('none-${track.id}'),
         alignment: Alignment.center,
-        child: Text('Нет слов', style: TextStyle(color: onBgColor, fontSize: 18)),
+        child: Text('Нет слов', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 18)),
       );
     }
   }

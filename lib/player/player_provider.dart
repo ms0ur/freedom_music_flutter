@@ -1,8 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/history.dart';
 import '../models/music.dart';
+
 import 'package:audiotags/audiotags.dart';
 import 'dart:typed_data';
 
@@ -63,6 +69,36 @@ class PlayerProvider extends ChangeNotifier {
     });
   }
 
+  Future<String> saveUint8ListToFile(Uint8List data, String filename) async {
+    // Получаем временный каталог
+    final directory = await getTemporaryDirectory();
+    // Создаем путь к файлу
+    final filePath = '${directory.path}/$filename';
+    // Создаем файл
+    final file = File(filePath);
+    // Записываем данные в файл
+    await file.writeAsBytes(data);
+    // Возвращаем URI файла
+    return file.uri.toString();
+  }
+
+  Future<Uri?> getCoverUri(Music track) async {
+    final id = track.id;
+    final directory = await getTemporaryDirectory();
+    final filePath = '${directory.path}/$id.png';
+    if (File(filePath).existsSync()) {
+      return File(filePath).uri;
+    } else {
+      final cover = _currentCover;
+      if (cover != null) {
+        final uri = await saveUint8ListToFile(cover, '$id.png');
+        return Uri.parse(uri);
+      } else {
+        return null;
+      }
+    }
+  }
+
   Future<void> setQueue(List<Music> tracks, {int startIndex = 0}) async {
     _queue = tracks;
     _currentIndex = startIndex;
@@ -81,11 +117,7 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     try {
-      await _player.setFilePath(currentTrack!.location);
-      _player.play();
-      _addToHistory(currentTrack!);
-
-      // Загрузим обложку
+      // Загрузка тегов до установки источника, чтобы получить обложку:
       final tags = await AudioTags.read(currentTrack!.location);
       if (tags?.pictures.isNotEmpty == true) {
         _currentCover = tags!.pictures.first.bytes;
@@ -95,6 +127,29 @@ class PlayerProvider extends ChangeNotifier {
         _currentCover = null;
       }
 
+
+      final coverUri = await getCoverUri(currentTrack!);
+
+
+
+
+      final mediaItem = MediaItem(
+        id: currentTrack!.id.toString(),
+        album: currentTrack!.album ?? "Unknown Album",
+        title: currentTrack!.title ?? "Unknown Title",
+        artist: currentTrack!.artists.join(', ') ?? "Unknown Artist",
+        artUri: coverUri,
+      );
+
+      await _player.setAudioSource(
+        AudioSource.file(
+          currentTrack!.location,
+          tag: mediaItem,
+        ),
+      );
+
+      _player.play();
+      _addToHistory(currentTrack!);
       notifyListeners();
     } catch (e) {
       print('Ошибка при воспроизведении: $e');

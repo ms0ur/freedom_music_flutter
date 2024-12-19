@@ -6,6 +6,8 @@ ThemeData darkMode = ThemeData(
       primary: Colors.deepPurple.shade300,
       secondary: Colors.deepPurpleAccent.shade200,
       inverseSurface: Colors.white,
+      onSurface: Colors.white,
+
 
     )
 );

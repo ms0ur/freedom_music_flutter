@@ -42,7 +42,6 @@ class MiniPlayer extends StatelessWidget {
         }
       },
       child: Container(
-        height: 102,
         color: Colors.grey[900],
         padding: EdgeInsets.all(8),
         child: Row(
